@@ -1,34 +1,33 @@
-import uuid
-import sys
-from django.contrib.auth import authenticate
-from django.contrib.auth import login as auth_login, logout as auth_logout
+from django.contrib import auth, messages
 from django.core.mail import send_mail
-from django.shortcuts import redirect, render
+from django.core.urlresolvers import reverse
+from django.shortcuts import redirect
 
 from accounts.models import Token
 
+
 def send_login_email(request):
     email = request.POST['email']
-    uid = str(uuid.uuid4())
-    Token.objects.create(email=email, uid=uid)
-    print('saving uid', uid, 'for email', email, file=sys.stderr)
-    url = request.build_absolute_uri(f'/accounts/login?uid={uid}')
-    send_mail(
-        'Your login link to Superlists',
-        f'Use this link to log in:\n\n{url}',
-        'norpely@superlists',
-        [email],
+    token = Token.objects.create(email=email)
+    url = request.build_absolute_uri(
+        reverse('login') + '?token={uid}'.format(uid=str(token.uid))
     )
-    return render(request, 'login_email_sent.html')
-
-def login(request):
-    print('login view', file=sys.stderr)
-    uid = request.GET.get('uid')
-    user = authenticate(uid=uid)
-    if user is not None:
-        auth_login(request, user)
+    message_body = 'Use this link to log in:\n\n{url}'.format(url=url)
+    send_mail(
+        'Your login link for Superlists',
+        message_body,
+        'noreply@superlists',
+        [email]
+    )
+    messages.success(
+        request,
+        "Check your email, we've sent you a link you can use to log in."
+    )
     return redirect('/')
 
-def logout(request):
-    auth_logout(request)
+
+def login(request):
+    user = auth.authenticate(uid=request.GET.get('token'))
+    if user:
+        auth.login(request, user)
     return redirect('/')
